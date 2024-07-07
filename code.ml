@@ -6,6 +6,13 @@ let etat = Vierge | Ouvert | Ferme
 let exemple = [|[1]; [0;2;3]; [1;4]; [1;4]; [2;3;5]; [4;6]; [5]|]
 
 
+(* Les fonctions suivantes vont me permettre de calculer la parité du nombre d'arêtes, de sommets et de sommets pendants dans le graphe.
+Ces valeurs serviront ensuite pour déterminer une stratégie gagnante au jeu.
+Les sommets pendants sont intéressants car ils forment un arbre pendant, dont les feuilles sont libérable en un seul coup,
+et donc rapportent un point directement ! *)
+
+
+
 let parite_arete g =    (*renvoie la parité du nombre d'arêtes*)
   let a = ref 0 in 
   for i = 0 to Array.length g - 1 do
@@ -26,36 +33,33 @@ type pendant = (*savoir si l'arete est pendante pour prog dynamique*)
   |Pendant
   |Non_pendant
 
-
-let parite_pendant_faux g = 
-  let n = Array.length g in
-  let visite = Array.make n Ferme in  (*si non visité alors None, si visité et fermé alors Some true, sinon Some false*)
-  let a = ref 0 in
-  let rec aux l i parent = match l with    (*determine si le sommet associé à la liste en entrée fait partie d'un arbre pendant*)
-    |[] -> visite.(i) <- Non_pendant      
-    |h :: t when h = parent -> aux t i parent
-    |h :: t -> if visite.(h) = Pendant then aux t i parent  
-              else if visite.(h) = Non_pendant then visite.(i) <- ????
-              else if visite.(h) = Ouvert then begin visite.(h) <- Non_pendant; visite.(i) <- Non_pendant end  (*il y a un cycle*)
-              else aux g.(h) h i; aux l i parent
-  in
-  for i = 0 to n - 1 do
-    if visite.(i) = Ferme then 
-      if List.length g.(i) = 1 then begin visite.(i) <- Pendant; a := !a + 1 end
-      else aux g.(i) i i
-  done;
-  if !a = 0 then None
-  else if !a mod 2 = 0 then Some P 
-  else Some I 
-
-
+  
 
 let parite_pendant g = 
   let n = Array.length g in
-  let visite = Array.make n Vierge in   (* type état *)
-  let pendant = Array.make n None in    (* type bool option *)
-  let rec aux x pere =       (*determine si le sommet x en entrée fait partie d'un arbre pendant*)
-    visite.(x) <- Ouvert;
-    let m = Array.length g.(x) in  
-    if m = 1 then pendant.(x) <- true Some
-    else List.iter 
+  let visite = Array.make n Ferme in  
+  let a = ref 0 in
+
+  let rec aux l i parent compt =    (* Le compteur compte le nb de voisins non pendants *)
+    visite.(i) <- Ouvert;
+    if List.length g.(i) = 1 then begin visite.(i) <- Pendant; a := !a + 1 end
+    else
+      match l with   
+      |[] -> if compt > 1 then visite.(i) <- Non_pendant else visite.(i) <- Pendant
+      |h :: t when h = parent -> aux t i parent compt
+      |h :: t -> match visite.(h) with  
+                    |Pendant -> aux t i parent compt 
+                    |Non_pendant -> if compt > 0 then visite.(i) <- Non_pendant 
+                                    else aux t i parent (compt+1)
+                    |Ouvert ->    (* il y a un cycle *)
+                          visite.(h) <- Non_pendant; 
+                          visite.(i) <- Non_pendant
+                    |Ferme -> aux g.(h) h i 0; (* on réexécute sur le sommet i *)
+                              aux l i parent compt 
+  in
+
+  for i = 0 to n - 1 do
+    if visite.(i) = Ferme then
+      aux g.(i) i i 0
+  done;
+  visite
